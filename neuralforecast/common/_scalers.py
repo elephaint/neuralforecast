@@ -348,12 +348,15 @@ class TemporalNorm(nn.Module):
     `dim` (int, optional): Dimension over to compute scale and shift. Defaults to -1.<br>
     `eps` (float, optional): Small value to avoid division by zero. Defaults to 1e-6.<br>
     `num_features`: int=None, for RevIN-like learnable affine parameters initialization.<br>
+    `n_series`: int=None, number of time-series, for RevIN-like learnable affine parameters initialization in case of a multivariate forecasting problem.<br>
 
     **References**<br>
     - [Kin G. Olivares, David Luo, Cristian Challu, Stefania La Vattiata, Max Mergenthaler, Artur Dubrawski (2023). "HINT: Hierarchical Mixture Networks For Coherent Probabilistic Forecasting". Neural Information Processing Systems, submitted. Working Paper version available at arxiv.](https://arxiv.org/abs/2305.07089)<br>
     """
 
-    def __init__(self, scaler_type="robust", dim=-1, eps=1e-6, num_features=None):
+    def __init__(
+        self, scaler_type="robust", dim=-1, eps=1e-6, num_features=None, n_series=None
+    ):
         super().__init__()
         compute_statistics = {
             None: identity_statistics,
@@ -388,6 +391,10 @@ class TemporalNorm(nn.Module):
         assert scaler_type in scalers.keys(), f"{scaler_type} not defined"
         if (scaler_type == "revin") and (num_features is None):
             raise Exception("You must pass num_features for ReVIN scaler.")
+        if (scaler_type == "revin") and dim == 2 and n_series is None:
+            raise Exception(
+                "You must pass n_series for ReVIN scaler in a Multivariate model."
+            )
 
         self.compute_statistics = compute_statistics[scaler_type]
         self.scaler = scalers[scaler_type]
@@ -397,16 +404,21 @@ class TemporalNorm(nn.Module):
         self.eps = eps
 
         if scaler_type == "revin":
-            self._init_params(num_features=num_features)
+            self._init_params(num_features=num_features, n_series=n_series)
 
-    def _init_params(self, num_features):
+    def _init_params(self, num_features, n_series=None):
         # Initialize RevIN scaler params to broadcast:
-        if self.dim == 1:  # [B,T,C]  [1,1,C]
+        if self.dim == 1:  # [B, T, C]  [1, 1, C]
             self.revin_bias = nn.Parameter(torch.zeros(1, 1, num_features))
             self.revin_weight = nn.Parameter(torch.ones(1, 1, num_features))
-        elif self.dim == -1:  # [B,C,T]  [1,C,1]
+        elif self.dim == -1:  # [B, C, T]  [1, C, 1]
             self.revin_bias = nn.Parameter(torch.zeros(1, num_features, 1))
             self.revin_weight = nn.Parameter(torch.ones(1, num_features, 1))
+        elif self.dim == 2:  # [B, C, T, n_series]  [1, C, 1, n_series]
+            self.revin_bias = nn.Parameter(torch.zeros(1, num_features, 1, n_series))
+            self.revin_weight = nn.Parameter(torch.ones(1, num_features, 1, n_series))
+        else:
+            raise NotImplementedError("Incorrect dimension for revin chosen")
 
     # @torch.no_grad()
     def transform(self, x, mask):
@@ -433,10 +445,15 @@ class TemporalNorm(nn.Module):
         # However this is only valid for point forecast not for
         # distribution's scale decouple technique.
         if self.scaler_type == "revin":
-            self.x_shift = self.x_shift + self.revin_bias
-            self.x_scale = self.x_scale * (torch.relu(self.revin_weight) + self.eps)
+            z = self.scaler(x, x_shift, x_scale)
+            # self.x_shift = self.x_shift + self.revin_bias
+            # self.x_scale = self.x_scale * (torch.relu(self.revin_weight) + self.eps)
+            # z = z * self.revin_weight
+            z = z * (torch.relu(self.revin_weight) + self.eps)
+            z = z + self.revin_bias
+        else:
+            z = self.scaler(x, x_shift, x_scale)
 
-        z = self.scaler(x, x_shift, x_scale)
         return z
 
     # @torch.no_grad()
@@ -460,6 +477,18 @@ class TemporalNorm(nn.Module):
         # z = (z / (self.revin_weight + self.eps))
         # However this is only valid for point forecast not for
         # distribution's scale decouple technique.
+        if self.scaler_type == "revin":
+            # For the multivariate case the lagged targets are assumed
+            # to be the first channel i.e. revin_bias: [1, C, 1, n_series]
+            # with idx = 0 of axis=1 containing the lagged targets
+            if self.revin_bias.ndim == 4:
+                z = z - self.revin_bias[:, 0]
+                # z = z / self.revin_weight[:, 0]
+                z = z / (torch.relu(self.revin_weight[:, 0]) + self.eps)
+            else:
+                z = z - self.revin_bias
+                # z = z / self.revin_weight
+                z = z / (torch.relu(self.revin_weight) + self.eps)
 
         x = self.inverse_scaler(z, x_shift, x_scale)
         return x

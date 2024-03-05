@@ -4,6 +4,7 @@
 __all__ = ['TSMixer']
 
 # %% ../../nbs/models.tsmixer.ipynb 5
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -62,38 +63,6 @@ class MixingLayer(nn.Module):
         return x + res
 
 # %% ../../nbs/models.tsmixer.ipynb 10
-class ReversibleInstanceNorm1d(nn.Module):
-    def __init__(self, num_features, eps=1e-5):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(num_features))
-        self.bias = nn.Parameter(torch.zeros(num_features))
-        self.eps = eps
-
-    def forward(self, x):
-        # Batch statistics
-        self.batch_mean = torch.mean(x, axis=1, keepdim=True).detach()
-        self.batch_std = torch.sqrt(
-            torch.var(x, axis=1, keepdim=True, unbiased=False) + self.eps
-        ).detach()
-
-        # Instance normalization
-        x = x - self.batch_mean
-        x = x / self.batch_std
-        x = x * self.weight
-        x = x + self.bias
-
-        return x
-
-    def reverse(self, x):
-        # Reverse the normalization
-        x = x - self.bias
-        x = x / self.weight
-        x = x * self.batch_std
-        x = x + self.batch_mean
-
-        return x
-
-# %% ../../nbs/models.tsmixer.ipynb 11
 class TSMixer(BaseMultivariate):
     """TSMixer
 
@@ -109,7 +78,6 @@ class TSMixer(BaseMultivariate):
     `n_block`: int=2, number of mixing layers in the model.<br>
     `ff_dim`: int=64, number of units for the second feed-forward layer in the feature MLP.<br>
     `dropout`: float=0.9, dropout rate between (0, 1) .<br>
-    `revin`: bool=True, if True uses Reverse Instance Normalization to process inputs and outputs.<br>
     `loss`: PyTorch module, instantiated train loss class from [losses collection](https://nixtla.github.io/neuralforecast/losses.pytorch.html).<br>
     `valid_loss`: PyTorch module=`loss`, instantiated valid loss class from [losses collection](https://nixtla.github.io/neuralforecast/losses.pytorch.html).<br>
     `max_steps`: int=1000, maximum number of training steps.<br>
@@ -145,7 +113,6 @@ class TSMixer(BaseMultivariate):
         n_block=2,
         ff_dim=64,
         dropout=0.9,
-        revin=True,
         loss=MAE(),
         valid_loss=None,
         max_steps: int = 1000,
@@ -184,10 +151,10 @@ class TSMixer(BaseMultivariate):
             drop_last_loader=drop_last_loader,
             **trainer_kwargs
         )
-        # Reversible InstanceNormalization layer
-        self.revin = revin
-        if self.revin:
-            self.norm = ReversibleInstanceNorm1d(num_features=n_series)
+        # Exogenous variables
+        self.futr_input_size = len(self.futr_exog_list)
+        self.hist_input_size = len(self.hist_exog_list)
+        self.stat_input_size = len(self.stat_exog_list)
 
         # Mixing layers
         mixing_layers = [
@@ -208,15 +175,12 @@ class TSMixer(BaseMultivariate):
         x = windows_batch["insample_y"]  # x: [batch_size, input_size, n_series]
         batch_size = x.shape[0]
 
-        # TSMixer: InstanceNorm + Mixing layers + Dense output layer + ReverseInstanceNorm
-        if self.revin:
-            x = self.norm(x)
+        # TSMixer:  Mixing layers + Dense output layer + ReverseInstanceNorm
+        # Note that reverse instance normalization can be applied via 'scaler_type=revin'
         x = self.mixing_layers(x)
         x = x.permute(0, 2, 1)
         x = self.out(x)
         x = x.permute(0, 2, 1)
-        if self.revin:
-            x = self.norm.reverse(x)
 
         x = x.reshape(
             batch_size, self.h, self.loss.outputsize_multiplier * self.n_series

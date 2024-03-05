@@ -100,15 +100,26 @@ class BaseMultivariate(pl.LightningModule):
         self.optimizer = optimizer
         self.optimizer_kwargs = optimizer_kwargs if optimizer_kwargs else {}
 
-        # Scaler
-        self.scaler = TemporalNorm(
-            scaler_type=scaler_type, dim=2
-        )  # Time dimension is in the second axis
-
-        # Variables
+        # Compute number of channels
         self.futr_exog_list = list(futr_exog_list) if futr_exog_list is not None else []
         self.hist_exog_list = list(hist_exog_list) if hist_exog_list is not None else []
         self.stat_exog_list = list(stat_exog_list) if stat_exog_list is not None else []
+        self.futr_input_size = len(self.futr_exog_list)
+        self.hist_input_size = len(self.hist_exog_list)
+        self.stat_input_size = len(self.stat_exog_list)
+        channels = (
+            1 + self.futr_input_size + self.hist_input_size + self.stat_input_size
+        )
+
+        # Scaler
+        self.scaler = TemporalNorm(
+            scaler_type=scaler_type, dim=2, num_features=channels, n_series=n_series
+        )  # Time dimension is in the second axis
+
+        # Variables
+        # self.futr_exog_list = list(futr_exog_list) if futr_exog_list is not None else []
+        # self.hist_exog_list = list(hist_exog_list) if hist_exog_list is not None else []
+        # self.stat_exog_list = list(stat_exog_list) if stat_exog_list is not None else []
 
         # Fit arguments
         self.val_size = 0
