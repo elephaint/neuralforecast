@@ -27,7 +27,7 @@ Architecture.</figcaption>
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L146"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L145"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### Normalize
@@ -71,7 +71,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L103"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L102"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### ReprogrammingLayer
@@ -115,7 +115,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L88"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L87"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### FlattenHead
@@ -158,7 +158,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L60"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L59"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### PatchEmbedding
@@ -201,7 +201,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L37"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L36"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### TokenEmbedding
@@ -244,7 +244,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L26"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L25"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### ReplicationPad1d
@@ -289,7 +289,7 @@ evaluation mode. :vartype training: bool
 ------------------------------------------------------------------------
 
 <a
-href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L221"
+href="https://github.com/Nixtla/neuralforecast/blob/main/neuralforecast/models/timellm.py#L220"
 target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 
 ### TimeLLM
@@ -311,8 +311,8 @@ target="_blank" style={{ float: "right", fontSize: "smaller" }}>source</a>
 >           start_padding_enabled:bool=False, step_size:int=1,
 >           num_lr_decays:int=0, early_stop_patience_steps:int=-1,
 >           scaler_type:str='identity', num_workers_loader:int=0,
->           drop_last_loader:bool=False, random_seed:int=1,
->           **trainer_kwargs)
+>           drop_last_loader:bool=False, random_seed:int=1, optimizer=None,
+>           optimizer_kwargs=None, **trainer_kwargs)
 > ```
 
 TimeLLM
@@ -374,8 +374,12 @@ scalers](https://nixtla.github.io/neuralforecast/common.scalers.html).<br/>
 generators.<br/> `num_workers_loader`: int=os.cpu_count(), workers to be
 used by `TimeSeriesDataLoader`.<br/> `drop_last_loader`: bool=False, if
 True `TimeSeriesDataLoader` drops last non-full batch.<br/> `alias`: str,
-optional, Custom name of the model.<br/> `**trainer_kwargs`: int, keyword
-trainer arguments inherited from [PyTorch Lighning’s
+optional, Custom name of the model.<br/> `optimizer`: Subclass of
+‘torch.optim.Optimizer’, optional, user specified optimizer instead of
+the default choice (Adam).<br/> `optimizer_kwargs`: dict, optional, list
+of parameters used by the user specified `optimizer`.<br/>  
+`**trainer_kwargs`: int, keyword trainer arguments inherited from
+[PyTorch Lighning’s
 trainer](https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.trainer.trainer.trainer.html?highlight=trainer).<br/>
 
 **References:**<br/> -[Ming Jin, Shiyu Wang, Lintao Ma, Zhixuan Chu,
