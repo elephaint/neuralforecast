@@ -16,6 +16,7 @@ from torch.distributions import Distribution
 from torch.distributions import Bernoulli, Normal, StudentT, Poisson, NegativeBinomial
 
 from torch.distributions import constraints
+from numbers import Number
 
 # %% ../../nbs/losses.pytorch.ipynb 6
 def _divide_no_nan(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -688,7 +689,7 @@ def student_scale_decouple(output, loc=None, scale=None, eps: float = 0.1):
     if (loc is not None) and (scale is not None):
         mean = (mean * scale) + loc
         tscale = (tscale + eps) * scale
-    df = 2.0 + F.softplus(df)
+    df = 3.0 + F.softplus(df)
     return (df, mean, tscale)
 
 
@@ -829,17 +830,22 @@ class Tweedie(Distribution):
        Series B (Methodological), 49(2), 127–162. http://www.jstor.org/stable/2345415](http://www.jstor.org/stable/2345415)<br>
     """
 
+    arg_constraints = {
+        "log_mu": constraints.interval(-1e20, 40),
+        "rho": constraints.interval(1.0001, 1.9999),
+    }
+    support = constraints.nonnegative
+
     def __init__(self, log_mu, rho, validate_args=None):
         # TODO: add sigma2 dispersion
-        # TODO add constraints
-        # arg_constraints = {'log_mu': constraints.real, 'rho': constraints.positive}
-        # support = constraints.real
         self.log_mu = log_mu
         self.rho = rho
-        assert rho > 1 and rho < 2, f"rho={rho} parameter needs to be between (1,2)."
-
-        batch_shape = log_mu.size()
-        super(Tweedie, self).__init__(batch_shape, validate_args=validate_args)
+        self.eps = 1e-6
+        if isinstance(log_mu, Number) and isinstance(rho, Number):
+            batch_shape = torch.Size()
+        else:
+            batch_shape = self.log_mu.size()
+        super().__init__(batch_shape, validate_args=validate_args)
 
     @property
     def mean(self):
@@ -865,7 +871,7 @@ class Tweedie(Distribution):
             alpha = alpha.expand(shape)
             beta = beta.expand(shape)
 
-            N = torch.poisson(rate)
+            N = torch.poisson(rate) + self.eps
             gamma = torch.distributions.gamma.Gamma(N * alpha, beta)
             samples = gamma.sample()
             samples[N == 0] = 0
@@ -904,9 +910,10 @@ def tweedie_scale_decouple(output, loc=None, scale=None):
     count and logits based on anchoring `loc`, `scale`.
     Also adds Tweedie domain protection to the distribution parameters.
     """
-    log_mu = output[0]
+    log_mu = F.hardtanh(output[0], min_val=-1e20, max_val=40)
+    eps = 1e-6
     if (loc is not None) and (scale is not None):
-        log_mu += torch.log(loc)  # TODO : rho scaling
+        log_mu += torch.log(loc + eps)  # TODO : rho scaling
     return (log_mu,)
 
 # %% ../../nbs/losses.pytorch.ipynb 62
